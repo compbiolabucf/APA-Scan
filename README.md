@@ -10,7 +10,7 @@ $python3 APA-scan.py
 
 To generate plots for any selected 3'UTR region, users need to run makePlots.py and provide input in a specific pattern: chromName:geneName:start-end
 
-$python3 makePlots.py
+$python3 Make-plots.py
 
 # User manual
 User manual for APA-Scan is available on github https://github.com/compbiolabucf/AS-Quant/blob/master/User-manual.pdf
