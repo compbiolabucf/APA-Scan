@@ -13,10 +13,7 @@ To generate plots for any selected 3'UTR region, users need to run makePlots.py 
 $python3 Make-plots.py
 
 # User manual
-User manual for APA-Scan is available on github https://github.com/compbiolabucf/AS-Quant/blob/master/User-manual.pdf
-
-# Sample data
-APA-Scan example data for mouse(mouse mm10) is included in the folder https://github.com/compbiolabucf/AS-Quant/tree/master/sample_input_mouse. For testing the tool, users can use the provided sample data for identification of probable APA events.
+User manual for APA-Scan is available on github https://github.com/compbiolabucf/APA-Scan/blob/master/User%20Manual.docx
 
 # Citation
 Please use the following information to cite.
