@@ -13,7 +13,7 @@ To generate plots for any selected 3'UTR region, users need to run makePlots.py 
 $python3 Make-plots.py
 
 # User manual
-User manual for APA-Scan is available on github https://github.com/compbiolabucf/APA-Scan/blob/master/User%20Manual.docx
+User manual for APA-Scan is available on github https://github.com/compbiolabucf/APA-Scan/blob/master/User%20Manual.pdf
 
 # Citation
 Please use the following information to cite.
