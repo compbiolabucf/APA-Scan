@@ -16,7 +16,7 @@ $python3 Make-plots.py
 User manual for APA-Scan is available on github https://github.com/compbiolabucf/APA-Scan/blob/master/User%20Manual.pdf
 
 # Citation
-Please use the following information to cite.
+Please use the following information to cite...(will add later)
 
 # Contact the Author
 Naima Ahmed Fahmi: fnaima@knights.ucf.edu
