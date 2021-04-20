@@ -40,6 +40,7 @@ if pasSeq_dir2[:-1] == "/":
 output_dir = config['OUTPUT_FOLDER']['output_dir']
 if output_dir[-1] != "/":
 	output_dir += "/"
+extended = config['Extended_3UTR']['value']
 
 os.makedirs(output_dir, exist_ok=True)
 inp_annotation = config['ANNOTATION']['annotation']
@@ -68,12 +69,14 @@ with open(inp_annotation, 'r') as f:
 chromDict = methods.makeChromDict(chromosomes, inp_annotation)
 
 print("Creating read coverage files for RNA-seq data...")
+"""
 os.chdir(input1_dir)
 for sample1 in glob.glob("*.bam"):
     preprocess.SamtoText(input1_dir, sample1, chromosomes)
 os.chdir(input2_dir)
 for sample2 in glob.glob("*.bam"):
     preprocess.SamtoText(input2_dir, sample2, chromosomes)
+"""
 
 result_filename = output_dir+"APA_Scan_"+g1_name+"_Vs_"+g2_name
 if pasSeq_dir1 == 'NULL' or pasSeq_dir2=='NULL':
@@ -81,7 +84,7 @@ if pasSeq_dir1 == 'NULL' or pasSeq_dir2=='NULL':
 	s2_namelist = list_dirs(input2_dir)
 	
 	print("Preparing result using RNA-seq data only")
-	methods.Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir)
+	methods.Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir, extended)
 	methods.with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, result_filename)
 
 else:
@@ -99,8 +102,8 @@ else:
 	p2_name = pasSeq_dir2.split("/")[-1]
 
 	filename = output_dir+'PA_peak_positions.csv'
-	methods.Get_Peak_Positions(filename, chromosomes, inp_annotation, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir)
-	methods.with_PA_peaks(chromosomes, input1_dir, input2_dir, g1_name, g2_name, filename, output_dir, result_filename)
+	methods.Generate_withPasSeqData(filename, chromosomes, inp_annotation, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir)
+	methods.Quantification(chromosomes, input1_dir, input2_dir, g1_name, g2_name, filename, result_filename)
 
 print("Total time:", round((time.time() - startTime)/60, 2), "minutes.")
 read_file = pd.read_csv(output_dir+result_filename+".csv", delimiter = '\t')
