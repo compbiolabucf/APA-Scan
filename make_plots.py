@@ -10,7 +10,7 @@ import csv
 import methods
 import time
 import sys
-import os
+import os, glob
 import configparser
 import xlsxwriter
 from matplotlib import rcParams
@@ -19,7 +19,7 @@ plt.rc('legend',**{'fontsize':14})
 rcParams.update({
     'font.family':'arial',
     })
-y_limit = 0
+y_limit, y_limit2 = 0, 0
 
 def bi_contains(lst, item):
     return bisect_left(lst, item)
@@ -27,7 +27,7 @@ def bi_contains(lst, item):
 def list_dirs(path):
     return [os.path.basename(x) for x in filter(os.path.isdir, glob.glob(os.path.join(path, '*')))]
 
-def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, startAll, endAll, number):
+def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, startAll, endAll, n1, p1):
 	bam_file_reader= open(pathin+'/'+sample+'/'+chrom+".txt", "rt")
 	bam_read = csv.reader(bam_file_reader, delimiter="\t")
 	bam_list = list(bam_read)
@@ -61,24 +61,27 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, startAll, end
 	p = np.array(p)
 	c = np.array(c)
 
-	#pos3 = bi_contains(p,start)
-	#pos4 = bi_contains(p,end)
-
-	global y_limit
-	m = max(c)
-	if m > y_limit:
-		y_limit = m
-
-	labelname = ""
-	if number == 1:
-		labelname = "Mock"
-		caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9, label = labelname)
+	if p1 == 0:
+		labelname = labelname+" (RNA-seq)"
+		global y_limit
+		m = max(c)
+		if m > y_limit:
+			y_limit = m
+		yy = y_limit
 	else:
-		labelname = "SARS_CoV-2"
+		labelname = labelname+" (3'-end-seq)"
+		global y_limit2
+		m = max(c)
+		if m > y_limit2:
+			y_limit2 = m
+		yy = y_limit2
+
+	if n1 == 1:
+		caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9, label = labelname)
+	elif n1 == 2:
 		caption = ax.fill_between(p,c, color="crimson", alpha=0.9, label = labelname)
 
 	ax.legend(handles = [caption])
-	#ax.fill_between(p[pos3:pos4+1],c[pos3:pos4+1], color="orange", alpha=0.9)
 	ax.spines['top'].set_color('none')
 	ax.spines['right'].set_color('none')
 	ax.set_xlim(startAll, endAll)
@@ -88,13 +91,12 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, startAll, end
 
 	return y_limit
 
+
 def Generate_annotation_plot(ax, strand, isoforms, exonCountList, exonStartList, exonEndList, startAll, endAll, pos):
-	#print(startAll, endAll)
 	ax = ax or plt.gca()
 	x_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
 	x_formatter.set_scientific(False)
 	ax.xaxis.set_major_formatter(x_formatter)
-	print("isoforms are: ",isoforms)
 
 	rnge = endAll-startAll+1
 
@@ -107,34 +109,27 @@ def Generate_annotation_plot(ax, strand, isoforms, exonCountList, exonStartList,
 		else:
 			ax.hlines(y=(ystart+ystart+height)/2, xmin=startAll, xmax=endAll, linewidth=1, color='skyblue', linestyle = '--')
 			
-			ecount, cat = exonCountList[i]
-			ecount = int(ecount)
 			stList = exonStartList[i]
 			enList = exonEndList[i]
-
-			if (cat == 'short'):
-				colr = 'crimson'
-			else:
-				colr = 'skyblue'
-
-			for p in range(ecount):
+			exonCount = int(exonCountList[i])
+			for p in range(exonCount):
 				ex_s = int(stList[p])
 				ex_e = int(enList[p])
 				width = int(enList[p]) - int(stList[p]) + 1
 
 				ww = 0.1*width
-				if (strand == '+') and (p == ecount-1):
+				if (strand == '+') and (p == exonCount-1):
 					width = ex_e - ex_s + 1
-					rect1 = patches.Rectangle((ex_s, ystart+1), width, 1, color = colr, alpha=0.9, fill = True)
+					rect1 = patches.Rectangle((ex_s, ystart+1), width, 1, color = 'skyblue', alpha=0.9, fill = True)
 					ax.add_patch(rect1)
-					rect2 = patches.Rectangle((ex_s, ystart), ww, height, color = colr, alpha=0.9, fill = True)
+					rect2 = patches.Rectangle((ex_s, ystart), ww, height, color = 'skyblue', alpha=0.9, fill = True)
 					ax.add_patch(rect2)
 				elif (strand == '-') and (p==0):
 					width = ex_e - ex_s + 1
-					rect1 = patches.Rectangle((ex_s, ystart+1), width, 1, color = colr, alpha=0.9, fill = True)
+					rect1 = patches.Rectangle((ex_s, ystart+1), width, 1, color = 'skyblue', alpha=0.9, fill = True)
 					ax.add_patch(rect1)
 					wstart = ex_s+(0.9*width)
-					rect2 = patches.Rectangle((wstart, ystart), ww, height, color = colr, alpha=0.9, fill = True)
+					rect2 = patches.Rectangle((wstart, ystart), ww, height, color = 'skyblue', alpha=0.9, fill = True)
 					ax.add_patch(rect2)
 				else:
 					rect = patches.Rectangle((ex_s,ystart), width, height, color = 'skyblue', fill = True)
@@ -152,139 +147,174 @@ def Generate_annotation_plot(ax, strand, isoforms, exonCountList, exonStartList,
 
 	return
 
-def Plot_Function(input_dir, s1_namelist, s2_namelist, gene, output_dir, ann_list):
+def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_list, output_dir):
+	chrom, geneID, rng = region.split(':')
+	start, end = rng.split('-')
+
+	g1_name = input1_dir.split("/")[-1]
+	g2_name = input2_dir.split("/")[-1]
+
 	df = pd.DataFrame(ann_list)
-	ann_tt = df.loc[df[10]==gene]
-	#if len(ann_tt) == 2:
-	if len(ann_tt)==2 or len(ann_tt)==3 or len(ann_tt)==4:
-		print("########", gene)
-		exonStartList = {}
-		exonEndList = {}
-		exonCountList = {}
+	ann_tt = df.loc[df[12]==geneID]
+	#if len(ann_tt)==2 or len(ann_tt)==3 or len(ann_tt)==4 or len(ann_tt)==5:
+	exonStartList = {}
+	exonEndList = {}
+	exonCountList = {}
 
-		isoforms = 0
-		position = 0
-		mini = 500000000
-		maxi = 0
-		tx_start_list, tx_end_list = [], []
-		for a_row in ann_tt.itertuples():
-			chrom = a_row[2]
-			strand = a_row[3]
-			tx_start = int(a_row[4])
-			tx_end = int(a_row[5])
-			tx_start_list.append(tx_start)
-			tx_end_list.append(tx_end)
-			cds_start = int(a_row[6])
-			cds_end = int(a_row[7])
-			#print("tx_start, tx_end, cds_start, cds_end: ", tx_start, tx_end, cds_start, cds_end)
+	isoforms = 0
+	position = 0
+	mini = 500000000
+	maxi = 0
+	tx_start_list, tx_end_list = [], []
+	strand = ""
+	
+	for a_row in ann_tt.itertuples():
+		chrom = a_row[3]
+		strand = a_row[4]
+		tx_start = int(a_row[5])
+		tx_end = int(a_row[6])
+		tx_start_list.append(tx_start)
+		tx_end_list.append(tx_end)
+		cds_start = int(a_row[7])
+		cds_end = int(a_row[8])
+		exonCount = int(a_row[9])
+		exonCountList[isoforms] = exonCount
+		exonStartList[isoforms] = ' '.join(a_row[10].split(',')).split()
+		exonEndList[isoforms] = ' '.join(a_row[11].split(',')).split()
 
-			exonCount = int(a_row[8])
-			category = a_row[12]
-			exonCountList[isoforms] = (exonCount, category)
-			exonStartList[isoforms] = a_row[9].split(',')
-			exonEndList[isoforms] = a_row[10].split(',')
-			isoforms+=1
-
-			if strand == '+':
-				if cds_end < mini:
-					mini = cds_end
-			elif strand == '-':
-				if cds_start > maxi:
-					maxi = cds_start
+		isoforms+=1
 
 		if strand == '+':
-			pos = mini
+			if cds_end < mini:
+				mini = cds_end
+		elif strand == '-':
+			if cds_start > maxi:
+				maxi = cds_start
+
+	if strand == '+':
+		pos = mini
+	else:
+		pos = maxi
+	all_start = min(np.array(tx_start_list))
+	all_end = max(np.array(tx_end_list))
+
+	title = geneID+":"+str(start)+"-"+str(end)
+
+	#fig = plt.figure(figsize=(8,8))
+	x_inches = 6.4     # [mm]*constant
+	y_inches = 4.8/5*(len(s1_namelist)*2+1)
+	dpi = 100
+	fig = plt.figure(1, figsize = (x_inches,y_inches), dpi = dpi, constrained_layout = True)
+
+	number_of_subplots = len(s1_namelist)+len(s2_namelist)+1
+	if pas_flag == 1:
+		number_of_subplots = (len(s1_namelist)+len(s2_namelist))*2+1
+		
+	fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
+
+	if pas_flag == 0:
+		for i in range (0,len(s1_namelist)):
+			y_limit = Generate_read_coverate_plot(axes[i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
+		for i in range(len(s1_namelist),number_of_subplots-1):
+			j = i - len(s1_namelist)
+			y_limit = Generate_read_coverate_plot(axes[i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
+	elif pas_flag == 1:
+		for i in range(0,len(s1_namelist)):
+			y_limit = Generate_read_coverate_plot(axes[2*i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
+			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq1_dir, p1_namelist[i], g1_name, chrom, geneID, iall_start, all_end, int(pos), 1, 1)
+			
+		for i in range(len(s1_namelist),number_of_subplots-1):
+			y_limit = Generate_read_coverate_plot(axes[2*i], input2_dir, s2_namelist[i], g2_name, chrom, geneID, all_start, all_end, 2, 0)
+			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq2_dir, p2_namelist[i], g2_name, chrom, geneID, all_start, all_end, int(pos), 2, 1)
+	
+	print("Generating annotation plots...")
+	ax3 = axes[number_of_subplots-1]
+	Generate_annotation_plot(ax3, strand, isoforms, exonCountList, exonStartList, exonEndList, all_start, all_end, pos)
+	ax3.set_xlabel('Position', fontsize="18")
+	ax3.set_ylabel('Annotation', fontsize="18")
+	ax3.spines['top'].set_color('none')
+	ax3.spines['bottom'].set_color('none')
+	ax3.spines['left'].set_color('none')
+	ax3.spines['right'].set_color('none')
+
+	for i in range(number_of_subplots-1):
+		if pas_flag == 0:
+			axes[i].set_ylim(0, y_limit*1.1)
 		else:
-			pos = maxi
-		all_start = min(np.array(tx_start_list))
-		all_end = max(np.array(tx_end_list))
+			if i%2==0:
+				axes[i].set_ylim(0, y_limit*1.1)
+			elif i%2==1:
+				axes[i].set_ylim(0, y_limit2*1.1)
 
-		title = ""+geneID+""
-
-		#fig = plt.figure(figsize=(8,8))
-		fig = plt.figure(figsize=(8,4))
-		ax = fig.add_subplot(111)
-		ax.spines['top'].set_color('none')
-		ax.spines['bottom'].set_color('none')
-		ax.spines['left'].set_color('none')
-		ax.spines['right'].set_color('none')
-		ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-		ax.set_title(title, color = "black", fontsize = 20)
-		ax.set_ylabel('Read Coverage', fontsize = 18)
-		ax.set_xlabel('Position', fontsize = 18)
-
-		#ax1 = fig.add_subplot(7,1,1)
-		#y_limit = Generate_read_coverate_plot(ax1, input_dir, s1_namelist[0], chrom, geneID, all_start, all_end, 1)
-		#ax2 = fig.add_subplot(7,1,2)
-		#y_limit = Generate_read_coverate_plot(ax2, input_dir, s1_namelist[1], chrom, geneID, all_start, all_end, 1)
-		#ax3 = fig.add_subplot(7,1,3)
-		#y_limit = Generate_read_coverate_plot(ax3, input_dir, s1_namelist[2], chrom, geneID, all_start, all_end, 1)
-		#ax4 = fig.add_subplot(7,1,4)
-		#y_limit = Generate_read_coverate_plot(ax4, input_dir, s2_namelist[0], chrom, geneID, all_start, all_end, 2)
-		#ax5 = fig.add_subplot(7,1,5)
-		#y_limit = Generate_read_coverate_plot(ax5, input_dir, s2_namelist[1], chrom, geneID, all_start, all_end, 2)
-		#ax6 = fig.add_subplot(7,1,6)
-		#y_limit = Generate_read_coverate_plot(ax6, input_dir, s2_namelist[2], chrom, geneID, all_start, all_end, 2)
-		#ax7 = fig.add_subplot(7,1,7)
-		#ax7.set_ylabel('Annotation', fontsize="16")
-		#Generate_annotation_plot(ax7, strand, isoforms, exonCountList, exonStartList, exonEndList, all_start, all_end, pos)
-
-		ax1 = fig.add_subplot(3,1,1)
-		y_limit = Generate_read_coverate_plot(ax1, input_dir, s1_namelist[0], chrom, geneID, all_start, all_end, 1)
-		ax2 = fig.add_subplot(3,1,2)
-		y_limit = Generate_read_coverate_plot(ax2, input_dir, s2_namelist[0], chrom, geneID, all_start, all_end, 2)
-		ax3 = fig.add_subplot(3,1,3)
-		ax3.set_ylabel('Annotation', fontsize="18")
-		Generate_annotation_plot(ax3, strand, isoforms, exonCountList, exonStartList, exonEndList, all_start, all_end, pos)
-
-		ax1.set_ylim(0, y_limit*1.2)
-		ax2.set_ylim(0, y_limit*1.2)
-
-		os.makedirs(output_dir, exist_ok=True)
-		plt.savefig(output_dir+title+'_test.png')
-		#plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 1000)
-		print("Plotted successfully.")
-		y_limit = 0
-		#sys.exit()
-
+	y_limit, y_limit2 = 0, 0
+	os.makedirs(output_dir, exist_ok=True)
+	plt.savefig(output_dir+title+'_test.png')
+	#plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 1000)
+	print("Plotted successfully.")
 
 
 ######### Main starts here #################
 startTime = time.time()
 
-inp_annotation = "hg38_refseq_2018May1.txt" 
+config = configparser.ConfigParser()
+config.read('configuration.ini')
+
+input1_dir = config['INPUT_RNAseq']['input1']
+input2_dir = config['INPUT_RNAseq']['input2']
+if input1_dir[-1] == "/":
+	input1_dir = input1_dir[:-1]
+if input2_dir[-1] == "/":
+	input2_dir = input2_dir[:-1]
+pasSeq1_dir = config['INPUT_PASseq']['pas1']
+pasSeq2_dir = config['INPUT_PASseq']['pas2']
+if pasSeq1_dir[:-1] == "/":
+	pasSeq1_dir = pasSeq1_dir[:-1]
+if pasSeq2_dir[:-1] == "/":
+	pasSeq2_dir = pasSeq2_dir[:-1]
+output_dir = config['OUTPUT_FOLDER']['output_dir']
+if output_dir[-1] != "/":
+	output_dir += "/"
+
+#os.makedirs(output_dir, exist_ok=True)
+inp_annotation = config['ANNOTATION']['annotation']
+ref_genome = config['ANNOTATION']['genome']
+print("RNA-seq input 1 dir:", input1_dir)
+print("RNA-seq input 2 dir:", input2_dir)
+print("3'-end-seq input 1 dir:", pasSeq1_dir)
+print("3'-end-seq input 2 dir:", pasSeq2_dir)
+print("Output Dir:", output_dir) 
+print("Annotation:", inp_annotation, ref_genome, "\n\n")
+
+pas_flag = 1
+if pasSeq1_dir=='NULL' or pasSeq2_dir == 'NULL':
+	pas_flag = 0
+
+s1_namelist = list_dirs(input1_dir)
+s2_namelist = list_dirs(input2_dir)
+p1_namelist, p2_namelist = "", ""
+if pas_flag == 1:
+	p1_namelist = list_dirs(pasSeq1_dir)
+	p2_namelist = list_dirs(pasSeq2_dir)
+
+print("Loading list of chromosomes from the annotation...")
+chromosomes = []
+with open(inp_annotation, 'r') as f:
+    reader = csv.reader(f, dialect='excel', delimiter='\t')
+    headers = next(f)
+    annotList = list(reader)
+    for rows in annotList:
+    	if '_' not in rows[2] and rows[2]!='chrM':
+	    	chromosomes.append(rows[2])
+    chr_set = set(chromosomes)
+    chromosomes = list(chr_set)
+
 ann_file_reader= open(inp_annotation, "rt")
 ann_read = csv.reader(ann_file_reader, delimiter="\t")
 ann_list = list(ann_read)
 
-#s1_namelist = ['GSM4462348', 'GSM4462349', 'GSM4462350']
-#s2_namelist = ['GSM4462351', 'GSM4462352', 'GSM4462343']
-#input_dir = "/home/naima/input/Covid19_data_human/tophat_hg38/"
-input_dir = "/home/naima/input/Covid19_data_human/Series_5_merged/"
-output_dir = "/home/naima/codes/TCBB_Covid19/APA_Scan/Plots_merged_sample/"
-s1_namelist = ['Series5_Mock_hg38']
-s2_namelist = ['Series5_SARS-CoV-2_hg38']
-os.makedirs(output_dir, exist_ok=True)
-
-reader1 = open('APA_Scan_Series5_A549_Mock_Vs_Series5_A549_SARS-CoV-2.csv', "rt")
-read1 = csv.reader(reader1, delimiter="\t")
-data_list = list(read1)[1:144]
-
-#for region in region_list:
-for line in data_list:
-	row = line[0].split(',')
-	chrom = row[0]
-	geneID = row[1]
-	strand = row[2]
-	start = row[3]
-	end = row[4]
-	pos = row[5]
-	#print(geneID)
-	if geneID == 'PMEPA1':
-		Plot_Function(input_dir, s1_namelist, s2_namelist, geneID, output_dir, ann_list)
-
-
-#gene_list = [('TMEM201'), ('CNPY2')]
+region = input("Enter the range: (chr:gene:start-end): ")
+Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_list, output_dir)
 
 totalTime = time.time() - startTime
 print("Total program time is : ",totalTime)
+
