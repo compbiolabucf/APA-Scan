@@ -115,7 +115,7 @@ def Generate_coverage(chrom, start, end, pos, strand, bam_list, position_row):
 	N = RC/length
 	return n, N
 
-def with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1, g2, output_dir, result_filename):
+def with_PAS_signal(chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1, g2, output_dir, result_filename):
 	ss = time.time()
 	len1 = len(s1_namelist)
 	len2 = len(s2_namelist)
@@ -171,16 +171,13 @@ def with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s
 					s1_n, s1_N, s2_n, s2_N = 0, 0, 0, 0
 					for sample1 in s1_namelist:
 						n, N = Generate_coverage(chrom, start, end, pos, strand, s1_bam_list[sample1], s1_position_row[sample1])
-						
 						s1_n += n
 						s1_N += N
 					for sample2 in s2_namelist:
 						n, N = Generate_coverage(chrom, start, end, pos, strand, s2_bam_list[sample2], s2_position_row[sample2])
-						
 						s2_n += n
 						s2_N += N
 
-					
 					n1 = s1_n/len1
 					N1 = s1_N/len1
 					n2 = s2_n/len2
@@ -200,7 +197,6 @@ def with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s
 						if 0 not in exp:
 							flag = 1
 							res, p_value = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
-							
 							if p_value < signi_p:
 								signi_p = p_value
 								signi_ratio_diff = ratio_diff
@@ -213,10 +209,9 @@ def with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s
 				
 				if flag == 1:
 					writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, n1_f, n2_f, N1_f-n1_f, N2_f-n2_f])
-			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
+			print(chrom, "completed in ", chrom, time.time() - ss, "sec")
 		f.close()
-	#os.remove(output_dir+"Signal_positions.csv", "r")
-	print("APA-Scan quantification done.")
+	os.remove(output_dir+"Signal_positions.csv", "r")
 	return
 
 def makeChromDict(chromosomes, inp_annotation):
@@ -424,9 +419,8 @@ def mergePeaksFromBothSamples(listOfPeakRange1, listOfPeakRange2, strand):
 
 	return cleavageSites
 
-
-###################### Two methods for processing 3-end-seq data ####################
-def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1_name, p2_name, output_dir):
+	
+def Generate_withPasSeqData(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1_name, p2_name, output_dir):
 	chromDict = makeChromDict(chromosomes, inp_annotation)
 
 	with open(inp_annotation, 'r') as f:
@@ -441,7 +435,6 @@ def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1
 
 	    	for chrom in chromosomes:
 	    		tt = time.time()
-	    		#if chrom == 'chrX':
 	    		bam_file_reader1 = open(p1_dir+"/"+p1_name+'/'+chrom+".txt", "rt")
 	    		bam_read1 = csv.reader(bam_file_reader1, delimiter="\t")
 	    		bam_list1 = list(bam_read1)
@@ -498,12 +491,13 @@ def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1
 		    					cleavageSites = mergePeaksFromBothSamples(listOfPeakRange1, listOfPeakRange2, strand)
 		    					writer.writerow([chrom, geneId, strand, st, en, cleavageSites])
 			    				
-		    	print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")		
+		    	print("Completed processing",chrom, ". Total time:", round(time.time() - tt, 2), "sec.")
+						
 	    g.close()
 	f.close()
 
 
-def with_PA_peaks(chromosomes, s1_dir, s2_dir, g1_name, g2_name, filename, output_dir, result_filename):
+def Quantification(chromosomes, s1_dir, s2_dir, g1_name, g2_name, filename, result_filename):
 	ss = time.time()
 
 	with open(filename, 'r') as h:
@@ -511,7 +505,7 @@ def with_PA_peaks(chromosomes, s1_dir, s2_dir, g1_name, g2_name, filename, outpu
 		headers = next(h)
 		pasReadList = list(reader)
 
-		with open(output_dir+result_filename+".csv",'w') as f:
+		with open(result_filename+".csv",'w') as f:
 			writer = csv.writer(f, delimiter='\t')
 			writer.writerow(['Chrom', 'Gene Name', 'strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'Length (before pos)', 'Read count (before pos)'+g1_name, 'Read count (before_pos)'+g2_name, 'Length (After_pos)', 'Read Count (After pos)'+g1_name, 'Read Count (After pos)'+g2_name, g1_name+':n1', g1_name+':N1', g2_name+':n2', g2_name+':N2'])
 
@@ -614,12 +608,84 @@ def with_PA_peaks(chromosomes, s1_dir, s2_dir, g1_name, g2_name, filename, outpu
 						writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, length_f, RC1_f, RC2_f, targetLength_f, targetRC1_f, targetRC2_f, n1_f, N1_f-n1_f, n2_f, N2_f-n2_f])
 			f.close()
 		h.close()
-	print("APA-Scan quantification done.")
+	print("End of quantification")
+
 ######################################################################################
+def with_pasSeq(chromosomes, chromDict, pasSeq_dir1, pasSeq_dir2, p1_namelist, p2_namelist, g1_name, g2_name, inp_annotation, output_dir):
+	print()
 
 
+def Get_Peak_Positions(chromosomes, chromDict, pasSeq_dir, pas_sample, inp_annotation, output_dir):
+	with open(inp_annotation, 'r') as f:
+	    reader = csv.reader(f, dialect='excel', delimiter='\t')
+	    headers = next(f)
+	    readerList = list(reader)
+	    df = pd.DataFrame(readerList)
 
-###################### Methods for processing RNA-seq data ####################
+	    filename = output_dir+pas_sample+'_peak_positions.csv'
+	    with open(filename,'w') as g:
+	    	writer = csv.writer(g, delimiter='\t')
+	    	writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End',  'Cleavage Sites'])
+
+	    	for chrom in chromosomes:
+	    		tt = time.time()
+	    		bam_file_reader1 = open(pasSeq_dir+"/"+pas_sample+'/'+chrom+".txt", "rt")
+	    		bam_read1 = csv.reader(bam_file_reader1, delimiter="\t")
+	    		bam_list1 = list(bam_read1)
+	    		position_row1 = [int(bam_list1[i][1]) for i in range(len(bam_list1))]
+
+	    		geneList = chromDict[chrom]
+	    		for (geneId, strand) in geneList:
+	    			rowsOfChr = df.loc[(df[2] == chrom) & (df[12] == geneId)]
+	    			targetList = []
+	    			for row in rowsOfChr.itertuples():
+	    				if str(row[2].strip()).startswith('NM_') or str(row[2].strip()).startswith('NR_'):
+		    				exonCount = int(row[9])
+		    				exonStartList = row[10].split(',')
+		    				exonEndList = row[11].split(',')
+		    				txStart = int(row[5])
+		    				txEnd = int(row[6])
+		    				cdsStart = int(row[7])
+		    				cdsEnd = int(row[8])
+
+		    				if cdsStart < cdsEnd:
+			    				if strand == '+':
+			    					for i in range(exonCount):
+			    						exonStart = int(exonStartList[i])
+			    						exonEnd = int(exonEndList[i])
+			    						if(exonStart<=cdsEnd and cdsEnd<=exonEnd):
+			    							if (exonStart, txEnd) not in targetList:
+			    								targetList.append((exonStart, txEnd))
+
+			    				elif strand == '-':
+			    					for i in range(exonCount):
+			    						exonStart = int(exonStartList[i])
+			    						exonEnd = int(exonEndList[i])
+			    						if(exonStart<=cdsStart and cdsStart<=exonEnd):
+			    							if (txStart, exonEnd) not in targetList:
+			    								targetList.append((txStart, exonEnd))
+
+		    		if len(targetList) > 0:
+		    			revisedTargetList = getFinalTargetRegion(targetList)
+
+		    			for (st, en) in revisedTargetList:
+		    				(p1, r1) = makeSplittedList(position_row1, bam_list1, st, en)
+		    				(p2, r2) = makeSplittedList(position_row2, bam_list2, st, en)
+
+		    				listOfPeakRange1 = findPeakPosition(p1, r1)
+		    				listOfPeakRange2 = findPeakPosition(p2, r2)
+		    				
+		    				if len(listOfPeakRange1) > 1 or len(listOfPeakRange2) > 1:
+		    					
+		    					cleavageSites = mergePeaksFromBothSamples(listOfPeakRange1, listOfPeakRange2, strand)
+		    					writer.writerow([chrom, geneId, strand, st, en, cleavageSites])
+			    				
+		    	print("Completed processing",chrom, ". Total time:", round(time.time() - tt, 2), "sec.")
+						
+	    g.close()
+	f.close()
+
+
 def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir):
 	with open(inp_annotation, 'r') as f:
 	    reader = csv.reader(f, dialect='excel', delimiter='\t')
@@ -637,11 +703,8 @@ def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, out
 	    		chrom, sequence = fasta.id, str(fasta.seq)
 	    		if chrom in chromosomes:
 	    			geneList = chromDict[chrom]
-	    			#print("Printing chromosome: ",chrom)
 	    			tt = time.time()
-	    			#print(geneList)
 	    			for (geneId, strand) in geneList:
-	    				#if chrom == 'chr10' and geneId == 'Pcdh15':
 	    				rowsOfChr = df.loc[(df[2] == chrom) & (df[12] == geneId)]
 	    				targetList = []
 	    				for row in rowsOfChr.itertuples():
@@ -657,13 +720,6 @@ def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, out
 		    					cdsEnd = int(row[8])
 		    					if cdsStart < cdsEnd:
 			    					if strand == '+':
-			    						"""
-			    						regStart = max(exonEndList_int)
-			    						regEnd = txEnd
-			    						if (regStart, regEnd) not in targetList:
-			    							targetList.append((regStart, regEnd))
-			    						"""
-
 			    						regStart = cdsEnd
 			    						regEnd = txEnd
 			    						for i in range(exonCount):
@@ -676,13 +732,6 @@ def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, out
 			    									break
 
 			    					elif strand == '-':
-			    						"""
-			    						regStart = txStart
-			    						regEnd = min(exonEndList_int)
-			    						if (regStart, regEnd) not in targetList:
-			    							targetList.append((regStart, regEnd))
-			    						"""
-
 			    						regStart = txStart
 			    						regEnd = cdsStart
 			    						for i in range(exonCount):
