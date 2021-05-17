@@ -14,7 +14,7 @@ import os, glob
 import configparser
 import xlsxwriter
 from matplotlib import rcParams
-plt.rc('legend',**{'fontsize':14})
+plt.rc('legend',**{'fontsize':10})
 
 rcParams.update({
     'font.family':'arial',
@@ -87,7 +87,7 @@ def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, st
 	ax.set_xlim(startAll, endAll)
 	ax.autoscale(enable = True)
 	ax.set_xticklabels([])
-	ax.tick_params(axis='both', bottom=False, which='major', labelsize=10)
+	ax.tick_params(axis='both', bottom=False, which='major', labelsize=8)
 
 	return y_limit
 
@@ -191,6 +191,10 @@ def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_name
 			if cds_start > maxi:
 				maxi = cds_start
 
+	if isoforms > 15:
+		print("Cannpt plot genes with more than 15 isoforms")
+		sys.exit()
+
 	if strand == '+':
 		pos = mini
 	else:
@@ -200,42 +204,51 @@ def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_name
 
 	title = geneID+":"+str(start)+"-"+str(end)
 
-	#fig = plt.figure(figsize=(8,8))
-	x_inches = 6.4     # [mm]*constant
+	x_inches = 6.4 
 	y_inches = 4.8/5*(len(s1_namelist)*2+1)
 	dpi = 100
 	fig = plt.figure(1, figsize = (x_inches,y_inches), dpi = dpi, constrained_layout = True)
 
 	number_of_subplots = len(s1_namelist)+len(s2_namelist)+1
-	if pas_flag == 1:
-		number_of_subplots = (len(s1_namelist)+len(s2_namelist))*2+1
-		
-	fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 
 	if pas_flag == 0:
+		fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 		for i in range (0,len(s1_namelist)):
-			y_limit = Generate_read_coverate_plot(axes[i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
+			ax = axes[i]
+			if i == 0:
+				ax.set_title(title, color = "black", fontsize = 16)
+			y_limit = Generate_read_coverate_plot(ax, input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
 		for i in range(len(s1_namelist),number_of_subplots-1):
 			j = i - len(s1_namelist)
 			y_limit = Generate_read_coverate_plot(axes[i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
 	elif pas_flag == 1:
+		number_of_subplots = (len(s1_namelist)+len(s2_namelist))*2+1
+		if number_of_subplots > 13:
+			print("Cannot draw more than 3 samples in each group")
+			sys.exit()
+
+		fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 		for i in range(0,len(s1_namelist)):
 			y_limit = Generate_read_coverate_plot(axes[2*i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
-			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq1_dir, p1_namelist[i], g1_name, chrom, geneID, iall_start, all_end, int(pos), 1, 1)
+			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq1_dir, p1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 1)
 			
-		for i in range(len(s1_namelist),number_of_subplots-1):
-			y_limit = Generate_read_coverate_plot(axes[2*i], input2_dir, s2_namelist[i], g2_name, chrom, geneID, all_start, all_end, 2, 0)
-			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq2_dir, p2_namelist[i], g2_name, chrom, geneID, all_start, all_end, int(pos), 2, 1)
+		for i in range(len(s1_namelist),len(s1_namelist)+len(s2_namelist)):
+			print(i)
+			j = i - len(s1_namelist)
+			y_limit = Generate_read_coverate_plot(axes[2*i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
+			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq2_dir, p2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 1)
 	
 	print("Generating annotation plots...")
 	ax3 = axes[number_of_subplots-1]
 	Generate_annotation_plot(ax3, strand, isoforms, exonCountList, exonStartList, exonEndList, all_start, all_end, pos)
-	ax3.set_xlabel('Position', fontsize="18")
-	ax3.set_ylabel('Annotation', fontsize="18")
+	ax3.set_xlabel('Position', fontsize="14")
+	ax3.set_ylabel('Annotation', fontsize="14")
+
 	ax3.spines['top'].set_color('none')
 	ax3.spines['bottom'].set_color('none')
 	ax3.spines['left'].set_color('none')
 	ax3.spines['right'].set_color('none')
+	ax3.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
 
 	for i in range(number_of_subplots-1):
 		if pas_flag == 0:
@@ -248,8 +261,8 @@ def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_name
 
 	y_limit, y_limit2 = 0, 0
 	os.makedirs(output_dir, exist_ok=True)
-	plt.savefig(output_dir+title+'_test.png')
-	#plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 1000)
+	plt.savefig(output_dir+title+'.png')
+	plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 1000)
 	print("Plotted successfully.")
 
 
@@ -275,7 +288,7 @@ output_dir = config['OUTPUT_FOLDER']['output_dir']
 if output_dir[-1] != "/":
 	output_dir += "/"
 
-#os.makedirs(output_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 inp_annotation = config['ANNOTATION']['annotation']
 ref_genome = config['ANNOTATION']['genome']
 print("RNA-seq input 1 dir:", input1_dir)
