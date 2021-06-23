@@ -15,7 +15,7 @@ import glob, os
 import preprocess
 import configparser
 
-speciesFlag, inputFlag, outFlag = 0, 0, 0
+(speciesFlag, inputFlag, outFlag, pasFlag) = (0, 0, 0, 0)
 
 startTime = time.time()
 
@@ -40,7 +40,7 @@ if pasSeq_dir2[:-1] == "/":
 output_dir = config['OUTPUT_FOLDER']['output_dir']
 if output_dir[-1] != "/":
 	output_dir += "/"
-extended = config['Extended_3UTR']['extended']
+extended = config['Extended_3UTR']['value']
 
 os.makedirs(output_dir, exist_ok=True)
 inp_annotation = config['ANNOTATION']['annotation']
@@ -82,8 +82,8 @@ if pasSeq_dir1 == 'NULL' or pasSeq_dir2=='NULL':
 	s2_namelist = list_dirs(input2_dir)
 	
 	print("Preparing result using RNA-seq data only")
-	methods.Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir, extended)
-	methods.with_PAS_signal(chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, result_filename)
+	methods.Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir)
+	methods.with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, result_filename)
 
 else:
 	print("Creating read coverage files for 3'-end-seq data...")
@@ -100,12 +100,10 @@ else:
 	p2_name = pasSeq_dir2.split("/")[-1]
 
 	filename = output_dir+'PA_peak_positions.csv'
-	#methods.Get_Peak_Positions(filename, chromosomes, inp_annotation, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir)
-	#methods.with_PA_peaks(chromosomes, input1_dir, input2_dir, g1_name, g2_name, filename, output_dir, result_filename)
-	methods.Generate_withPasSeqData(filename, chromosomes, inp_annotation, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir)
-	methods.Quantification(chromosomes, input1_dir, input2_dir, g1_name, g2_name, filename, result_filename)
+	methods.Get_Peak_Positions(filename, chromosomes, inp_annotation, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir)
+	methods.with_PA_peaks(chromosomes, input1_dir, input2_dir, g1_name, g2_name, filename, output_dir, result_filename)
 
 print("Total time:", round((time.time() - startTime)/60, 2), "minutes.")
-read_file = pd.read_csv(result_filename+".csv", delimiter = '\t')
-read_file.to_excel (result_filename+".xlsx", index = None, header=True)
-os.remove(result_filename+".csv")
+read_file = pd.read_csv(output_dir+result_filename+".csv", delimiter = '\t')
+read_file.to_excel (output_dir+result_filename+".xlsx", index = None, header=True)
+os.remove(output_dir+result_filename+".csv")
