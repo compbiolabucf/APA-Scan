@@ -81,12 +81,12 @@ def CountReadCoverage(chrom, start, end, bam_list, position_row):
 	pos1 = bi_contains(position_row, start)
 	pos2 = bi_contains(position_row, end)
 
-	if pos2 >= len(bam_list) or int(bam_list[pos2][1]) != end:
+	if pos2 >= len(bam_list) or int(bam_list[pos2][0]) != end:
 		pos2 = pos2 - 1
 
 	if(pos1 < len(bam_list) and pos2 < len(bam_list)):
 		for t in range(pos1, pos2+1):
-			read = int(bam_list[t][2])
+			read = int(bam_list[t][1])
 			totalCount += read
 		
 	return totalCount
@@ -96,7 +96,7 @@ def read_bamfiles(input_dir, sample, chrom):
 	bam_file_reader = open(input_dir+'/'+sample+'/'+chrom+".txt", "rt")
 	bam_read = csv.reader(bam_file_reader, delimiter="\t")
 	bam_list = list(bam_read)
-	position_row = [int(bam_list[i][1]) for i in range(len(bam_list))]
+	position_row = [int(bam_list[i][0]) for i in range(len(bam_list))]
 	return bam_list, position_row
 
 def Generate_coverage(chrom, start, end, pos, strand, bam_list, position_row):
@@ -115,109 +115,6 @@ def Generate_coverage(chrom, start, end, pos, strand, bam_list, position_row):
 	N = RC/length
 	return n, N
 
-def with_PAS_signal(pasFlag, chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1, g2, output_dir, result_filename):
-	ss = time.time()
-	len1 = len(s1_namelist)
-	len2 = len(s2_namelist)
-
-	read1 = open(output_dir+"Signal_positions.csv", "r")
-	reader1 = csv.reader(read1, delimiter="\t")
-	pasList = list(reader1)
-	df_p = pd.DataFrame(pasList)
-
-	with open(output_dir+result_filename+".csv",'w') as f:
-		writer = csv.writer(f, delimiter='\t')
-		writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'n1: '+g1, 'n2: '+g2, 'N1: '+g1, 'N2: '+g2])
-
-		position_row = []
-		for chrom in chromosomes:
-			s1_bam_list = {}
-			s2_bam_list = {}
-			s1_position_row = {}
-			s2_position_row = {}
-			for sample1 in s1_namelist:
-				bam_list, position_row = read_bamfiles(input1_dir, sample1, chrom)
-				s1_bam_list[sample1] = bam_list
-				s1_position_row[sample1] = position_row
-			for sample2 in s2_namelist:
-				bam_list, position_row = read_bamfiles(input2_dir, sample2, chrom)
-				s2_bam_list[sample2] = bam_list
-				s2_position_row[sample2] = position_row
-
-			selected_rows = df_p.loc[df_p[0]==chrom]
-			for row in selected_rows.itertuples():
-				geneID = row[2].strip()
-				strand = row[3]
-				start = int(row[4])
-				end = int(row[5])
-				pasPositionsList = (str(row[6]).strip('[ ]')).split(',')
-
-				signi_p = 1.1
-				ratio_diff = 'Nan'
-				signi_ratio_diff = 'Nan'
-				abs_ratio_diff = 'Nan'
-				n1_f = 0
-				N1_f = 0
-				n2_f = 0
-				N2_f = 0
-				signi_pos = 0
-				flag = 0
-
-				for pos in pasPositionsList:
-					pos = int(pos.strip())
-					length = end - start + 1
-					targetLength = length
-					
-					s1_n, s1_N, s2_n, s2_N = 0, 0, 0, 0
-					for sample1 in s1_namelist:
-						n, N = Generate_coverage(chrom, start, end, pos, strand, s1_bam_list[sample1], s1_position_row[sample1])
-						
-						s1_n += n
-						s1_N += N
-					for sample2 in s2_namelist:
-						n, N = Generate_coverage(chrom, start, end, pos, strand, s2_bam_list[sample2], s2_position_row[sample2])
-						
-						s2_n += n
-						s2_N += N
-
-					
-					n1 = s1_n/len1
-					N1 = s1_N/len1
-					n2 = s2_n/len2
-					N2 = s2_N/len2
-					
-					ratio_diff = 0
-
-					N1 = N1 + n1
-					N2 = N2 + n2
-
-					if N1>0 and N2>0:
-						ratio_diff = (n1/N1) - (n2/N2)
-						P0 = (n1+n2)/(N1+N2)
-						n10 = N1 * P0
-						n20 = N2 * P0
-						exp = [n10, N1-n10, n20, N2-n20]
-						if 0 not in exp:
-							flag = 1
-							res, p_value = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
-							
-							if p_value < signi_p:
-								signi_p = p_value
-								signi_ratio_diff = ratio_diff
-								abs_ratio_diff = abs(signi_ratio_diff)
-								n1_f = n1
-								N1_f = N1
-								n2_f = n2
-								N2_f = N2
-								signi_pos = pos
-				
-				if flag == 1:
-					writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, n1_f, n2_f, N1_f-n1_f, N2_f-n2_f])
-			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
-		f.close()
-	#os.remove(output_dir+"Signal_positions.csv", "r")
-	print("APA-Scan quantification done.")
-	return
 
 def makeChromDict(chromosomes, inp_annotation):
 	chromDict = {}
@@ -426,18 +323,17 @@ def mergePeaksFromBothSamples(listOfPeakRange1, listOfPeakRange2, strand):
 
 
 ###################### Two methods for processing 3-end-seq data ####################
-def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1_name, p2_name, output_dir):
-	chromDict = makeChromDict(chromosomes, inp_annotation)
-
+def Get_Peak_Positions(chromosomes, chromDict, inp_annotation, p1_dir, p2_dir, p1_name, p2_name, output_dir, extended):
 	with open(inp_annotation, 'r') as f:
 	    reader = csv.reader(f, dialect='excel', delimiter='\t')
 	    headers = next(f)
 	    readerList = list(reader)
 	    df = pd.DataFrame(readerList)
 
+	    filename = output_dir+'Peak_positions.csv'
 	    with open(filename,'w') as g:
 	    	writer = csv.writer(g, delimiter='\t')
-	    	writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End',  'Cleavage Sites'])
+	    	writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End',  'Positions'])
 
 	    	for chrom in chromosomes:
 	    		tt = time.time()
@@ -486,6 +382,16 @@ def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1
 		    		if len(targetList) > 0:
 		    			revisedTargetList = getFinalTargetRegion(targetList)
 
+		    			if extended.upper() == 'YES':
+		    				if strand == '+':
+			    				st, en = revisedTargetList[-1]
+			    				del revisedTargetList[-1]
+			    				revisedTargetList.append((st, en+10000))
+			    			elif strand == '-':
+			    				st, en = revisedTargetList[0]
+			    				del revisedTargetList[0]
+			    				revisedTargetList.append((st-10000, en))
+
 		    			for (st, en) in revisedTargetList:
 		    				(p1, r1) = makeSplittedList(position_row1, bam_list1, st, en)
 		    				(p2, r2) = makeSplittedList(position_row2, bam_list2, st, en)
@@ -503,118 +409,201 @@ def Get_Peak_Positions(filename, chromosomes, inp_annotation, p1_dir, p2_dir, p1
 	f.close()
 
 
-def with_PA_peaks(chromosomes, s1_dir, s2_dir, g1_name, g2_name, filename, output_dir, result_filename):
+def with_PA_peaks(chromosomes, s1_dir, s2_dir, g1_name, g2_name, output_dir, result_filename):
 	ss = time.time()
 
-	with open(filename, 'r') as h:
-		reader = csv.reader(h, dialect='excel', delimiter='\t')
-		headers = next(h)
-		pasReadList = list(reader)
+	read1 = open(output_dir+"Peak_positions.csv", "r")
+	reader1 = csv.reader(read1, delimiter="\t")
+	pasReadList = list(reader1)
+	df = pd.DataFrame(pasReadList)
 
-		with open(output_dir+result_filename+".csv",'w') as f:
-			writer = csv.writer(f, delimiter='\t')
-			writer.writerow(['Chrom', 'Gene Name', 'strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'Length (before pos)', 'Read count (before pos)'+g1_name, 'Read count (before_pos)'+g2_name, 'Length (After_pos)', 'Read Count (After pos)'+g1_name, 'Read Count (After pos)'+g2_name, g1_name+':n1', g1_name+':N1', g2_name+':n2', g2_name+':N2'])
+	with open(output_dir+result_filename+".csv",'w') as f:
+		writer = csv.writer(f, delimiter='\t')
+		writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'n1: '+g1, 'n2: '+g2, 'N1: '+g1, 'N2: '+g2])
 
-			position_row = []
-			for chrom in chromosomes:
-				bam_file_reader1 = open(s1_dir+"/"+g1_name+'/'+chrom+".txt", "rt")
-				bam_read1 = csv.reader(bam_file_reader1, delimiter="\t")
-				bam_list1 = list(bam_read1)
-				position_row1 = [int(bam_list1[i][1]) for i in range(len(bam_list1))]
+		position_row = []
+		for chrom in chromosomes:
+			bam_file_reader1 = open(s1_dir+"/"+g1_name+'/'+chrom+".txt", "rt")
+			bam_read1 = csv.reader(bam_file_reader1, delimiter="\t")
+			bam_list1 = list(bam_read1)
+			position_row1 = [int(bam_list1[i][1]) for i in range(len(bam_list1))]
 
-				bam_file_reader2 = open(s2_dir+"/"+g2_name+'/'+chrom+".txt", "rt")
-				bam_read2 = csv.reader(bam_file_reader2, delimiter="\t")
-				bam_list2 = list(bam_read2)
-				position_row2 = [int(bam_list2[i][1]) for i in range(len(bam_list2))]
-				
-				df = pd.DataFrame(pasReadList)
-				target_tt = df.loc[df[0]==chrom]
-				for t_row in target_tt.itertuples():
-					geneID = t_row[2].strip()
-					strand = t_row[3]
-					start = int(t_row[4])
-					end = int(t_row[5])
-					pasPositionsList = (str(t_row[6]).strip('[ ]')).split(',')
+			bam_file_reader2 = open(s2_dir+"/"+g2_name+'/'+chrom+".txt", "rt")
+			bam_read2 = csv.reader(bam_file_reader2, delimiter="\t")
+			bam_list2 = list(bam_read2)
+			position_row2 = [int(bam_list2[i][1]) for i in range(len(bam_list2))]
+			
+			target_tt = df.loc[df[0]==chrom]
+			for t_row in target_tt.itertuples():
+				geneID = t_row[2].strip()
+				strand = t_row[3]
+				start = int(t_row[4])
+				end = int(t_row[5])
+				pasPositionsList = (str(t_row[6]).strip('[ ]')).split(',')
 
-					signi_p = 1.1
-					ratio_diff = 'Nan'
-					signi_ratio_diff = 'Nan'
-					abs_ratio_diff = 'Nan'
-					n1_f = 0
-					N1_f = 0
-					n2_f = 0
-					N2_f = 0
-					targetRC1_f = 0
-					targetRC2_f = 0
-					RC1_f = 0
-					RC2_f = 0
-					length_f = 0
-					targetLength_f = 0
-					signi_pos = 0
-					flag = 0
-					for pos in pasPositionsList:
-						pos = int(pos.strip())
-						length = end - start + 1
-						targetLength = length
+				signi_p = 1.1
+				ratio_diff = 'Nan'
+				signi_ratio_diff = 'Nan'
+				abs_ratio_diff = 'Nan'
+				n1_f = 0
+				N1_f = 0
+				n2_f = 0
+				N2_f = 0
+				targetRC1_f = 0
+				targetRC2_f = 0
+				RC1_f = 0
+				RC2_f = 0
+				length_f = 0
+				targetLength_f = 0
+				signi_pos = 0
+				flag = 0
+				for pos in pasPositionsList:
+					pos = int(pos.strip())
+					length = end - start + 1
+					targetLength = length
+					
+					if (strand == '+' and (pos-start)<=(length*0.85)) or (strand == '-' and (pos-start)>=(length*0.15)):
+						if strand == '+':
+							length = pos-start
+							targetLength = end - pos
+							RC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
+							RC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
+							targetRC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
+							targetRC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
+						else:
+							targetLength = pos-start
+							length = end - pos
+							RC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
+							RC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
+							targetRC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
+							targetRC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
 						
-						if (strand == '+' and (pos-start)<=(length*0.85)) or (strand == '-' and (pos-start)>=(length*0.15)):
-							if strand == '+':
-								length = pos-start
-								targetLength = end - pos
-								RC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
-								RC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
-								targetRC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
-								targetRC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
-							else:
-								targetLength = pos-start
-								length = end - pos
-								RC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
-								RC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
-								targetRC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
-								targetRC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
+						n1 = targetRC1/targetLength
+						n2 = targetRC2/targetLength
+						N1 = RC1/length
+						N2 = RC2/length
 
-							n1 = targetRC1/targetLength
-							n2 = targetRC2/targetLength
-							N1 = RC1/length
-							N2 = RC2/length
+						if N1!=0 and N2!=0:
+							ratio_diff = (n1/N1) - (n2/N2)
+						else:
+							ratio_diff = 0
 
-							if N1!=0 and N2!=0:
-								ratio_diff = (n1/N1) - (n2/N2)
-							else:
-								ratio_diff = 0
+						N1 = N1 + n1
+						N2 = N2 + n2
 
-							N1 = N1 + n1
-							N2 = N2 + n2
+						if N1!= 0 and N2!=0:
+							P0 = (n1+n2)/(N1+N2)
+							n10 = N1 * P0
+							n20 = N2 * P0
+							exp = [n10, N1-n10, n20, N2-n20]
+							if 0 not in exp:
+								flag = 1
+								res = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
+								if res[1] < signi_p:
+									signi_p = res[1]
+									signi_ratio_diff = ratio_diff
+									abs_ratio_diff = abs(signi_ratio_diff)
+									n1_f = n1
+									N1_f = N1
+									n2_f = n2
+									N2_f = N2
+									RC1_f = RC1
+									RC2_f = RC2
+									targetRC1_f = targetRC1
+									targetRC2_f = targetRC2
+									signi_pos = pos
+									length_f = length
+									targetLength_f = targetLength
 
-							if N1!= 0 and N2!=0:
-								P0 = (n1+n2)/(N1+N2)
-								n10 = N1 * P0
-								n20 = N2 * P0
-								exp = [n10, N1-n10, n20, N2-n20]
-								if 0 not in exp:
-									flag = 1
-									res = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
-									if res[1] < signi_p:
-										signi_p = res[1]
-										signi_ratio_diff = ratio_diff
-										abs_ratio_diff = abs(signi_ratio_diff)
-										n1_f = n1
-										N1_f = N1
-										n2_f = n2
-										N2_f = N2
-										RC1_f = RC1
-										RC2_f = RC2
-										targetRC1_f = targetRC1
-										targetRC2_f = targetRC2
-										signi_pos = pos
-										length_f = length
-										targetLength_f = targetLength
-
-					if flag == 1:			
-						writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, length_f, RC1_f, RC2_f, targetLength_f, targetRC1_f, targetRC2_f, n1_f, N1_f-n1_f, n2_f, N2_f-n2_f])
-			f.close()
-		h.close()
+				if flag == 1:			
+					writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, n1_f, n2_f, N1_f-n1_f, N2_f-n2_f])
+			
+			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
+		f.close()
 	print("APA-Scan quantification done.")
+	return
+
+
+def with_PA_peaks_all(chromosomes, s1_dir, s2_dir, g1_name, g2_name, output_dir, result_filename):
+	ss = time.time()
+
+	read1 = open(output_dir+"Peak_positions.csv", "r")
+	reader1 = csv.reader(read1, delimiter="\t")
+	pasReadList = list(reader1)
+	df = pd.DataFrame(pasReadList)
+
+	with open(output_dir+result_filename+".csv",'w') as f:
+		writer = csv.writer(f, delimiter='\t')
+		writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'n1: '+g1, 'n2: '+g2, 'N1: '+g1, 'N2: '+g2])
+
+		position_row = []
+		for chrom in chromosomes:
+			bam_file_reader1 = open(s1_dir+"/"+g1_name+'/'+chrom+".txt", "rt")
+			bam_read1 = csv.reader(bam_file_reader1, delimiter="\t")
+			bam_list1 = list(bam_read1)
+			position_row1 = [int(bam_list1[i][1]) for i in range(len(bam_list1))]
+
+			bam_file_reader2 = open(s2_dir+"/"+g2_name+'/'+chrom+".txt", "rt")
+			bam_read2 = csv.reader(bam_file_reader2, delimiter="\t")
+			bam_list2 = list(bam_read2)
+			position_row2 = [int(bam_list2[i][1]) for i in range(len(bam_list2))]
+			
+			target_tt = df.loc[df[0]==chrom]
+			for t_row in target_tt.itertuples():
+				geneID = t_row[2].strip()
+				strand = t_row[3]
+				start = int(t_row[4])
+				end = int(t_row[5])
+				pasPositionsList = (str(t_row[6]).strip('[ ]')).split(',')
+
+				for pos in pasPositionsList:
+					pos = int(pos.strip())
+					length = end - start + 1
+					targetLength = length
+					
+					if (strand == '+' and (pos-start)<=(length*0.85)) or (strand == '-' and (pos-start)>=(length*0.15)):
+						if strand == '+':
+							length = pos-start
+							targetLength = end - pos
+							RC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
+							RC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
+							targetRC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
+							targetRC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
+						else:
+							targetLength = pos-start
+							length = end - pos
+							RC1 = CountReadCoverage(chrom, pos+1, end, bam_list1, position_row1)
+							RC2 = CountReadCoverage(chrom, pos+1, end, bam_list2, position_row2)
+							targetRC1 = CountReadCoverage(chrom, start, pos, bam_list1, position_row1)
+							targetRC2 = CountReadCoverage(chrom, start, pos, bam_list2, position_row2)
+						
+						n1 = targetRC1/targetLength
+						n2 = targetRC2/targetLength
+						N1 = RC1/length
+						N2 = RC2/length
+
+						if N1!=0 and N2!=0:
+							ratio_diff = (n1/N1) - (n2/N2)
+						else:
+							ratio_diff = 0
+
+						N1 = N1 + n1
+						N2 = N2 + n2
+
+						if N1!= 0 and N2!=0:
+							P0 = (n1+n2)/(N1+N2)
+							n10 = N1 * P0
+							n20 = N2 * P0
+							exp = [n10, N1-n10, n20, N2-n20]
+							if 0 not in exp:
+								flag = 1
+								res = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
+								writer.writerow([chrom, geneID, strand, start, end, pos, res[1], ratio_diff, abs(ratio_diff), n1, n2, N1-n1, N2-n2])
+
+			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
+		f.close()
+	print("APA-Scan quantification done.")
+	return
 ######################################################################################
 
 
@@ -637,11 +626,9 @@ def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, out
 	    		chrom, sequence = fasta.id, str(fasta.seq)
 	    		if chrom in chromosomes:
 	    			geneList = chromDict[chrom]
-	    			#print("Printing chromosome: ",chrom)
+	    			
 	    			tt = time.time()
-	    			#print(geneList)
 	    			for (geneId, strand) in geneList:
-	    				#if chrom == 'chr10' and geneId == 'Pcdh15':
 	    				rowsOfChr = df.loc[(df[2] == chrom) & (df[12] == geneId)]
 	    				targetList = []
 	    				for row in rowsOfChr.itertuples():
@@ -727,3 +714,187 @@ def Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, out
 
 	    g.close()
 	f.close()
+
+
+def with_PAS_signal(chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1, g2, output_dir, result_filename):
+	ss = time.time()
+	len1 = len(s1_namelist)
+	len2 = len(s2_namelist)
+
+	read1 = open(output_dir+"Signal_positions.csv", "r")
+	reader1 = csv.reader(read1, delimiter="\t")
+	pasList = list(reader1)
+	df_p = pd.DataFrame(pasList)
+
+	with open(output_dir+result_filename+".csv",'w') as f:
+		writer = csv.writer(f, delimiter='\t')
+		writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'n1: '+g1, 'n2: '+g2, 'N1: '+g1, 'N2: '+g2])
+
+		position_row = []
+		for chrom in chromosomes:
+			s1_bam_list = {}
+			s2_bam_list = {}
+			s1_position_row = {}
+			s2_position_row = {}
+			for sample1 in s1_namelist:
+				bam_list, position_row = read_bamfiles(input1_dir, sample1, chrom)
+				s1_bam_list[sample1] = bam_list
+				s1_position_row[sample1] = position_row
+			for sample2 in s2_namelist:
+				bam_list, position_row = read_bamfiles(input2_dir, sample2, chrom)
+				s2_bam_list[sample2] = bam_list
+				s2_position_row[sample2] = position_row
+
+			selected_rows = df_p.loc[df_p[0]==chrom]
+			for row in selected_rows.itertuples():
+				geneID = row[2].strip()
+				strand = row[3]
+				start = int(row[4])
+				end = int(row[5])
+				pasPositionsList = (str(row[6]).strip('[ ]')).split(',')
+
+				signi_p = 1.1
+				ratio_diff = 'Nan'
+				signi_ratio_diff = 'Nan'
+				abs_ratio_diff = 'Nan'
+				n1_f = 0
+				N1_f = 0
+				n2_f = 0
+				N2_f = 0
+				signi_pos = 0
+				flag = 0
+
+				for pos in pasPositionsList:
+					pos = int(pos.strip())
+					length = end - start + 1
+					targetLength = length
+					
+					s1_n, s1_N, s2_n, s2_N = 0, 0, 0, 0
+					for sample1 in s1_namelist:
+						n, N = Generate_coverage(chrom, start, end, pos, strand, s1_bam_list[sample1], s1_position_row[sample1])
+						s1_n += n
+						s1_N += N
+					for sample2 in s2_namelist:
+						n, N = Generate_coverage(chrom, start, end, pos, strand, s2_bam_list[sample2], s2_position_row[sample2])
+						
+						s2_n += n
+						s2_N += N
+
+					n1 = s1_n/len1
+					N1 = s1_N/len1
+					n2 = s2_n/len2
+					N2 = s2_N/len2
+					
+					ratio_diff = 0
+
+					N1 = N1 + n1
+					N2 = N2 + n2
+
+					if N1>0 and N2>0:
+						ratio_diff = (n1/N1) - (n2/N2)
+						P0 = (n1+n2)/(N1+N2)
+						n10 = N1 * P0
+						n20 = N2 * P0
+						exp = [n10, N1-n10, n20, N2-n20]
+						if 0 not in exp:
+							flag = 1
+							res, p_value = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
+							
+							if p_value < signi_p:
+								signi_p = p_value
+								signi_ratio_diff = ratio_diff
+								abs_ratio_diff = abs(signi_ratio_diff)
+								n1_f = n1
+								N1_f = N1
+								n2_f = n2
+								N2_f = N2
+								signi_pos = pos
+				
+				if flag == 1:
+					writer.writerow([chrom, geneID, strand, start, end, signi_pos, signi_p, signi_ratio_diff, abs_ratio_diff, n1_f, n2_f, N1_f-n1_f, N2_f-n2_f])
+			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
+		f.close()
+
+	print("APA-Scan quantification done.")
+	return
+
+
+def with_PAS_signal_all(chromosomes, input1_dir, input2_dir, s1_namelist, s2_namelist, g1, g2, output_dir, result_filename):
+	ss = time.time()
+	len1 = len(s1_namelist)
+	len2 = len(s2_namelist)
+
+	read1 = open(output_dir+"Signal_positions.csv", "r")
+	reader1 = csv.reader(read1, delimiter="\t")
+	pasList = list(reader1)
+	df_p = pd.DataFrame(pasList)
+
+	with open(output_dir+result_filename+".csv",'w') as f:
+		writer = csv.writer(f, delimiter='\t')
+		writer.writerow(['Chrom', 'Gene Name', 'Strand', 'Start', 'End', 'Position', 'p-value', 'Ratio Difference', 'Absolute ratio difference', 'n1: '+g1, 'n2: '+g2, 'N1: '+g1, 'N2: '+g2])
+
+		position_row = []
+		for chrom in chromosomes:
+			s1_bam_list = {}
+			s2_bam_list = {}
+			s1_position_row = {}
+			s2_position_row = {}
+			for sample1 in s1_namelist:
+				bam_list, position_row = read_bamfiles(input1_dir, sample1, chrom)
+				s1_bam_list[sample1] = bam_list
+				s1_position_row[sample1] = position_row
+			for sample2 in s2_namelist:
+				bam_list, position_row = read_bamfiles(input2_dir, sample2, chrom)
+				s2_bam_list[sample2] = bam_list
+				s2_position_row[sample2] = position_row
+
+			selected_rows = df_p.loc[df_p[0]==chrom]
+			for row in selected_rows.itertuples():
+				geneID = row[2].strip()
+				strand = row[3]
+				start = int(row[4])
+				end = int(row[5])
+				pasPositionsList = (str(row[6]).strip('[ ]')).split(',')
+
+				for pos in pasPositionsList:
+					pos = int(pos.strip())
+					length = end - start + 1
+					targetLength = length
+					
+					s1_n, s1_N, s2_n, s2_N = 0, 0, 0, 0
+					for sample1 in s1_namelist:
+						n, N = Generate_coverage(chrom, start, end, pos, strand, s1_bam_list[sample1], s1_position_row[sample1])
+						s1_n += n
+						s1_N += N
+					for sample2 in s2_namelist:
+						n, N = Generate_coverage(chrom, start, end, pos, strand, s2_bam_list[sample2], s2_position_row[sample2])
+						
+						s2_n += n
+						s2_N += N
+
+					n1 = s1_n/len1
+					N1 = s1_N/len1
+					n2 = s2_n/len2
+					N2 = s2_N/len2
+					
+					ratio_diff = 0
+
+					N1 = N1 + n1
+					N2 = N2 + n2
+
+					if N1>0 and N2>0:
+						ratio_diff = (n1/N1) - (n2/N2)
+						P0 = (n1+n2)/(N1+N2)
+						n10 = N1 * P0
+						n20 = N2 * P0
+						exp = [n10, N1-n10, n20, N2-n20]
+						if 0 not in exp:
+							flag = 1
+							res, p_value = chisquare([n1, N1-n1, n2, N2-n2], f_exp=exp, ddof = 1)
+							writer.writerow([chrom, geneID, strand, start, end, pos, p_value, ratio_diff, abs(ratio_diff), n1, n2, N1-n1, N2-n2])
+	
+			print("Processing ", chrom, "done in ", chrom, time.time() - ss, "sec")
+		f.close()
+
+	print("APA-Scan quantification done.")
+	return
