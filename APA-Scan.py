@@ -46,15 +46,16 @@ all_events = config['All_events']['All']
 os.makedirs(output_dir, exist_ok=True)
 inp_annotation = config['ANNOTATION']['annotation']
 ref_genome = config['ANNOTATION']['genome']
+number_of_cores = config['CORES']['number_of_cores']
 g1_name = input1_dir.split("/")[-1]
 g2_name = input2_dir.split("/")[-1]
 print("RNA-seq input 1 dir:", input1_dir)
 print("RNA-seq input 2 dir:", input2_dir)
 print("3'-end-seq input 1 dir:", pasSeq_dir1)
 print("3'-end-seq input 2 dir:", pasSeq_dir2)
-print("Output Dir:", output_dir) 
+print("Output Dir:", output_dir)
+print("Number of Cores:", number_of_cores)
 print("Annotation:", inp_annotation, ref_genome, "\n\n")
-
 print("Loading chromosomes...")
 df = pd.read_csv(inp_annotation, delimiter='\t')
 chr_list = df['chrom'].str.split("_", n = 1, expand = True)
@@ -66,16 +67,16 @@ print("Creating read coverage files for RNA-seq data...")
 
 os.chdir(input1_dir)
 for sample1 in glob.glob("*.bam"):
-    preprocess.SamtoText(input1_dir, sample1, chromosomes)
+    preprocess.SamtoText(input1_dir, sample1, chromosomes, number_of_cores)
 os.chdir(input2_dir)
 for sample2 in glob.glob("*.bam"):
-    preprocess.SamtoText(input2_dir, sample2, chromosomes)
+    preprocess.SamtoText(input2_dir, sample2, chromosomes, number_of_cores)
 
 result_filename = "APA_Scan_"+g1_name+"_Vs_"+g2_name
 if pasSeq_dir1 == 'NULL' or pasSeq_dir2=='NULL':
 	s1_namelist = list_dirs(input1_dir)
 	s2_namelist = list_dirs(input2_dir)
-	
+
 	print("Preparing result using RNA-seq data only")
 	methods.Get_Signal_Positions(chromosomes, chromDict, inp_annotation, ref_genome, output_dir, extended)
 	if all_events == 'all':
@@ -88,10 +89,10 @@ else:
 	print("Creating read coverage files for 3'-end-seq data...")
 	os.chdir(pasSeq_dir1)
 	for sample1 in glob.glob("*.bam"):
-	    preprocess.SamtoText(pasSeq_dir1, sample1, chromosomes)
+	    preprocess.SamtoText(pasSeq_dir1, sample1, chromosomes, number_of_cores)
 	os.chdir(pasSeq_dir2)
 	for sample2 in glob.glob("*.bam"):
-	    preprocess.SamtoText(pasSeq_dir2, sample2, chromosomes)
+	    preprocess.SamtoText(pasSeq_dir2, sample2, chromosomes, number_of_cores)
 
 	p1_namelist = list_dirs(pasSeq_dir1)
 	p2_namelist = list_dirs(pasSeq_dir2)
@@ -109,4 +110,3 @@ print("Total time:", round((time.time() - startTime)/60, 2), "minutes.")
 read_file = pd.read_csv(output_dir+result_filename+".csv", delimiter = '\t')
 read_file.to_excel (output_dir+result_filename+".xlsx", index = None, header=True)
 os.remove(output_dir+result_filename+".csv")
-
