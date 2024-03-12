@@ -16,9 +16,6 @@ import xlsxwriter
 from matplotlib import rcParams
 plt.rc('legend',**{'fontsize':10})
 
-rcParams.update({
-    'font.family':'arial',
-    })
 y_limit, y_limit2 = 0, 0
 
 def bi_contains(lst, item):
@@ -28,10 +25,9 @@ def list_dirs(path):
     return [os.path.basename(x) for x in filter(os.path.isdir, glob.glob(os.path.join(path, '*')))]
 
 def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, startAll, endAll, n1, p1):
-	bam_file_reader= open(pathin+'/'+sample+'/'+chrom+".txt", "rt")
-	bam_read = csv.reader(bam_file_reader, delimiter="\t")
-	bam_list = list(bam_read)
-	position_row = [int(bam_list[i][1]) for i in range(len(bam_list))]
+	bam_df = pd.read_csv(os.path.join(pathin, sample, chrom+".txt"), delimiter='\t')
+	position_row = bam_df.iloc[:, 0].tolist()
+	bam_list = bam_df.values.tolist()
 
 	ax = ax or plt.gca()
 	x_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
@@ -40,7 +36,7 @@ def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, st
 
 	pos1 = bi_contains(position_row, startAll)
 	pos2 = bi_contains(position_row, endAll)
-	if(int(bam_list[pos2][1]) != endAll):
+	if pos2 >= len(bam_list) or int(bam_list[pos2][0]) != endAll:
 		pos2 = pos2 - 1
 
 	p = []
@@ -53,8 +49,8 @@ def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, st
 		c.append(0)
 		
 	for t in range(pos1, pos2+1):
-		position = int(bam_list[t][1])
-		read = int(bam_list[t][2])
+		position = int(bam_list[t][0])
+		read = int(bam_list[t][1])
 		index = p.index(position)
 		c[index] = read
 
@@ -89,7 +85,7 @@ def Generate_read_coverate_plot(ax, pathin, sample, labelname, chrom, geneID, st
 	ax.set_xticklabels([])
 	ax.tick_params(axis='both', bottom=False, which='major', labelsize=8)
 
-	return y_limit
+	return y_limit, y_limit2
 
 
 def Generate_annotation_plot(ax, strand, isoforms, exonCountList, exonStartList, exonEndList, startAll, endAll, pos):
@@ -147,108 +143,101 @@ def Generate_annotation_plot(ax, strand, isoforms, exonCountList, exonStartList,
 
 	return
 
-def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_list, output_dir):
-	chrom, geneID, rng = region.split(':')
-	start, end = rng.split('-')
-
+def Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_df, output_dir):
 	g1_name = input1_dir.split("/")[-1]
 	g2_name = input2_dir.split("/")[-1]
 
-	df = pd.DataFrame(ann_list)
-	ann_tt = df.loc[df[12]==geneID]
-	#if len(ann_tt)==2 or len(ann_tt)==3 or len(ann_tt)==4 or len(ann_tt)==5:
-	exonStartList = {}
-	exonEndList = {}
-	exonCountList = {}
+	chrom, geneID, rng = region.split(':')
+	start, end = rng.split('-')
+	ann_tt = ann_df.loc[(ann_df['name2']==geneID)]
 
 	isoforms = 0
 	position = 0
 	mini = 500000000
 	maxi = 0
 	tx_start_list, tx_end_list = [], []
+	exonStartList, exonEndList, exonCountList = {}, {}, {}
+
 	strand = ""
-	
-	for a_row in ann_tt.itertuples():
-		chrom = a_row[3]
-		strand = a_row[4]
-		tx_start = int(a_row[5])
-		tx_end = int(a_row[6])
-		tx_start_list.append(tx_start)
-		tx_end_list.append(tx_end)
-		cds_start = int(a_row[7])
-		cds_end = int(a_row[8])
-		exonCount = int(a_row[9])
+	for ind, a_row in ann_tt.iterrows():
+		chrom, cdsStart, cdsEnd = a_row['chrom'], int(a_row['cdsStart']), int(a_row['cdsEnd'])
+		txStart, txEnd = int(a_row['txStart']), int(a_row['txEnd'])
+		exonCount, strand = int(a_row['exonCount']), a_row['strand']
+		exonStarts = a_row['exonStarts'].split(',')[0:-1]
+		exonEnds = a_row['exonEnds'].split(',')[0:-1]
+		tx_start_list.append(txStart)
+		tx_end_list.append(txEnd)
 		exonCountList[isoforms] = exonCount
-		exonStartList[isoforms] = ' '.join(a_row[10].split(',')).split()
-		exonEndList[isoforms] = ' '.join(a_row[11].split(',')).split()
+		exonStartList[isoforms] = exonStarts
+		exonEndList[isoforms] = exonEnds
 
 		isoforms+=1
 
 		if strand == '+':
-			if cds_end < mini:
-				mini = cds_end
+			if cdsEnd < mini:
+				mini = cdsEnd
 		elif strand == '-':
-			if cds_start > maxi:
-				maxi = cds_start
-
-	if isoforms > 15:
-		print("Cannpt plot genes with more than 15 isoforms")
-		sys.exit()
+			if cdsStart > maxi:
+				maxi = cdsStart
 
 	if strand == '+':
 		pos = mini
 	else:
 		pos = maxi
-	all_start = min(np.array(tx_start_list))
-	all_end = max(np.array(tx_end_list))
+	all_start,all_end = min(tx_start_list), max(tx_end_list)
+	print("all_start, all_end", all_start, all_end)
 
 	title = geneID+":"+str(start)+"-"+str(end)
 
-	x_inches = 6.4 
+	#fig = plt.figure(figsize=(8,8))
+	x_inches = 6.4     # [mm]*constant
 	y_inches = 4.8/5*(len(s1_namelist)*2+1)
 	dpi = 100
 	fig = plt.figure(1, figsize = (x_inches,y_inches), dpi = dpi, constrained_layout = True)
+	ax = fig.add_subplot(111)
+	ax.spines['top'].set_color('none')
+	ax.spines['bottom'].set_color('none')
+	ax.spines['left'].set_color('none')
+	ax.spines['right'].set_color('none')
+	ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+	ax.set_title(title, color = "black", fontsize = 16)
+	ax.set_ylabel('Read Coverage', fontsize = 14)
 
 	number_of_subplots = len(s1_namelist)+len(s2_namelist)+1
 
 	if pas_flag == 0:
 		fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 		for i in range (0,len(s1_namelist)):
-			ax = axes[i]
-			if i == 0:
-				ax.set_title(title, color = "black", fontsize = 16)
-			y_limit = Generate_read_coverate_plot(ax, input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
 		for i in range(len(s1_namelist),number_of_subplots-1):
 			j = i - len(s1_namelist)
-			y_limit = Generate_read_coverate_plot(axes[i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
 	elif pas_flag == 1:
 		number_of_subplots = (len(s1_namelist)+len(s2_namelist))*2+1
-		if number_of_subplots > 13:
-			print("Cannot draw more than 3 samples in each group")
-			sys.exit()
-
 		fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 		for i in range(0,len(s1_namelist)):
-			y_limit = Generate_read_coverate_plot(axes[2*i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
-			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq1_dir, p1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 1)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[2*i], input1_dir, s1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 0)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq1_dir, p1_namelist[i], g1_name, chrom, geneID, all_start, all_end, 1, 1)
 			
 		for i in range(len(s1_namelist),len(s1_namelist)+len(s2_namelist)):
 			print(i)
 			j = i - len(s1_namelist)
-			y_limit = Generate_read_coverate_plot(axes[2*i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
-			y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq2_dir, p2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 1)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[2*i], input2_dir, s2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 0)
+			y_limit, y_limit2 = Generate_read_coverate_plot(axes[2*i+1], pasSeq2_dir, p2_namelist[j], g2_name, chrom, geneID, all_start, all_end, 2, 1)
 	
 	print("Generating annotation plots...")
 	ax3 = axes[number_of_subplots-1]
 	Generate_annotation_plot(ax3, strand, isoforms, exonCountList, exonStartList, exonEndList, all_start, all_end, pos)
+	
 	ax3.set_xlabel('Position', fontsize="14")
 	ax3.set_ylabel('Annotation', fontsize="14")
-
+	"""
 	ax3.spines['top'].set_color('none')
 	ax3.spines['bottom'].set_color('none')
 	ax3.spines['left'].set_color('none')
 	ax3.spines['right'].set_color('none')
 	ax3.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+	"""
 
 	for i in range(number_of_subplots-1):
 		if pas_flag == 0:
@@ -321,12 +310,10 @@ with open(inp_annotation, 'r') as f:
     chr_set = set(chromosomes)
     chromosomes = list(chr_set)
 
-ann_file_reader= open(inp_annotation, "rt")
-ann_read = csv.reader(ann_file_reader, delimiter="\t")
-ann_list = list(ann_read)
+ann_df = pd.read_csv(inp_annotation, delimiter='\t', index_col=0)
 
 region = input("Enter the range: (chr:gene:start-end): ")
-Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_list, output_dir)
+Plot_Function(pas_flag, region, input1_dir, input2_dir, s1_namelist, s2_namelist, pasSeq1_dir, pasSeq2_dir, p1_namelist, p2_namelist, ann_df, output_dir)
 
 totalTime = time.time() - startTime
 print("Total program time is : ",totalTime)
