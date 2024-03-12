@@ -68,6 +68,7 @@ for sample2 in os.listdir(input2_dir):
 	if sample2.endswith('.bam'):
 		methods.SamtoText(input2_dir, sample2, chromosomes)
 
+
 result_filename = "APA_Scan_"+g1_name+"_Vs_"+g2_name
 if pasSeq_dir1 == 'NULL' or pasSeq_dir2=='NULL':
 	s1_namelist = list_dirs(input1_dir)
@@ -96,7 +97,7 @@ else:
 	p1_name = pasSeq_dir1.split("/")[-1]
 	p2_name = pasSeq_dir2.split("/")[-1]
 
-	#methods.Get_Peak_Positions(chromosomes, ann_df, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir, extended)
+	methods.Get_Peak_Positions(chromosomes, ann_df, pasSeq_dir1, pasSeq_dir2, p1_name, p2_name, output_dir, extended)
 	if all_events == 'all':
 		methods.with_PA_peaks_all(chromosomes, input1_dir, input2_dir, g1_name, g2_name, output_dir, result_filename)
 	else:
